@@ -49,7 +49,17 @@
       margin-right: 10px;
       color: #00c038;
     }
-    /* Botão de ação */
+    /* Campo de nome */
+    #nameInput {
+      padding: 8px;
+      width: 80%;
+      max-width: 300px;
+      margin-bottom: 20px;
+      border: none;
+      border-radius: 4px;
+      font-size: 1em;
+    }
+    /* Botões de ação */
     button {
       background-color: #00c038;
       color: #fff;
@@ -65,7 +75,7 @@
       opacity: 0.6;
       cursor: not-allowed;
     }
-    button:hover {
+    button:hover:enabled {
       background-color: #00b330;
     }
     /* Área de exibição das coordenadas */
@@ -100,99 +110,124 @@
     <img class="logo" src="Prancheta13.png" alt="Logo Tropical Transportes">
     <h1>Ferramenta de Geolocalização</h1>
     <ul class="instructions">
+      <li>Digite seu nome abaixo.</li>
       <li>Certifique-se de estar em sua residência.</li>
       <li>Clique no botão abaixo para autorizar o acesso à sua localização.</li>
       <li>Após obter as coordenadas, clique no segundo botão para copiá-las.</li>
     </ul>
+    <input id="nameInput" type="text" placeholder="Seu nome">
+    <br>
     <button id="getLocationButton" type="button" onclick="getLocation()">OBTER LOCALIZAÇÃO</button>
     <div id="coordinatesDisplay" class="coordinates" style="display: none;">
       Suas coordenadas: <span id="coordinates"></span>
     </div>
     <button id="copyButton" type="button" onclick="copyCoordinates()" disabled>COPIAR COORDENADAS</button>
   </div>
-  
+
   <!-- Toast para exibição de mensagens -->
   <div id="toast"></div>
-  
+
   <script>
+    // URL do seu Apps Script Web App
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTwW8kp6h9aN2_Qav5csbnNfS204dqyWr8Dmgarm60AyOVEhtvE6w1SLpbbM0ZsihqA/exec";
+
     // Função para exibir toast persistente (sem auto ocultar)
     function showPersistentToast(message) {
-      var toast = document.getElementById("toast");
+      const toast = document.getElementById("toast");
       toast.textContent = message;
       toast.classList.add("show");
     }
-    
+
     // Função para ocultar o toast
     function hideToast() {
-      var toast = document.getElementById("toast");
+      const toast = document.getElementById("toast");
       toast.classList.remove("show");
     }
-    
-    // Função para exibir toast com auto ocultação (usada para mensagens de erro, por exemplo)
+
+    // Função para exibir toast com auto ocultação
     function showToast(message, duration = 3000) {
-      var toast = document.getElementById("toast");
+      const toast = document.getElementById("toast");
       toast.textContent = message;
       toast.classList.add("show");
-      setTimeout(function() {
-        toast.classList.remove("show");
-      }, duration);
+      setTimeout(() => toast.classList.remove("show"), duration);
     }
 
     // Variável global para armazenar as coordenadas
     let coordinates = "";
 
-    // Função para obter a localização
+    // Função para obter a localização e enviar ao Google Sheets
     function getLocation() {
-      const getLocationButton = document.getElementById("getLocationButton");
-      getLocationButton.disabled = true;
-
+      const btn = document.getElementById("getLocationButton");
+      btn.disabled = true;
       showPersistentToast("Por favor, permita o acesso à sua localização e aguarde.");
 
       navigator.geolocation.getCurrentPosition(
-        function(position) {
-          // Limitar as coordenadas a 6 casas decimais
+        async (position) => {
+          // Limitar a 6 casas decimais
           const latitude = position.coords.latitude.toFixed(6);
           const longitude = position.coords.longitude.toFixed(6);
           coordinates = `${latitude}, ${longitude}`;
 
-          // Exibir as coordenadas na tela
+          // Exibir na tela
           document.getElementById("coordinates").textContent = coordinates;
           document.getElementById("coordinatesDisplay").style.display = "block";
-
-          // Habilitar o botão de cópia
           document.getElementById("copyButton").disabled = false;
-
           showPersistentToast("Localização obtida com sucesso!");
+
+          // Capturar nome
+          const name = document.getElementById("nameInput").value.trim();
+          if (!name) {
+            showToast("Por favor, digite seu nome antes de enviar.", 3000);
+            btn.disabled = false;
+            return;
+          }
+
+          // Enviar POST ao Apps Script
+          try {
+            const response = await fetch(SCRIPT_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: name, coords: coordinates })
+            });
+            const result = await response.json();
+            if (result.status === 'sucesso') {
+              showPersistentToast("Dados enviados à planilha com sucesso!");
+            } else {
+              throw new Error(result.message || 'Erro desconhecido');
+            }
+          } catch (err) {
+            showToast(`Falha ao enviar dados: ${err.message}`, 4000);
+          } finally {
+            btn.disabled = false;
+          }
         },
-        function(error) {
-          let errorMsg = "";
+        (error) => {
+          let msg = '';
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMsg = "Acesso à localização foi negado. Por favor, habilite o acesso em seu navegador.";
+              msg = 'Acesso à localização negado. Habilite em seu navegador.';
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMsg = "Informações de localização não estão disponíveis.";
+              msg = 'Informações de localização não disponíveis.';
               break;
             case error.TIMEOUT:
-              errorMsg = "A solicitação para obter a localização foi expirada.";
+              msg = 'Tempo esgotado para obter localização.';
               break;
             default:
-              errorMsg = "Ocorreu um erro desconhecido ao obter a localização.";
-              break;
+              msg = 'Erro desconhecido ao obter localização.';
           }
-          showToast(errorMsg, 4000);
-          getLocationButton.disabled = false;
+          showToast(msg, 4000);
+          btn.disabled = false;
         }
       );
     }
 
-    // Função para copiar as coordenadas
+    // Função para copiar as coordenadas ao clipboard
     async function copyCoordinates() {
       try {
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(coordinates);
         } else {
-          // Fallback para execCommand
           const textarea = document.createElement('textarea');
           textarea.value = coordinates;
           document.body.appendChild(textarea);
@@ -201,10 +236,11 @@
           document.body.removeChild(textarea);
         }
         showPersistentToast("Coordenadas copiadas com sucesso!");
-      } catch (error) {
+      } catch {
         showToast("Não foi possível copiar as coordenadas. Verifique as permissões.", 4000);
       }
     }
   </script>
 </body>
 </html>
+
