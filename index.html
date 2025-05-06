@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ferramenta de Geolocalização</title>
+  <style>
+    /* Estilos globais */
+    body {
+      background-color: #1c2a3a;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+    }
+    /* Estilo da logo */
+    .logo {
+      max-width: 300px;
+      width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto 20px;
+    }
+    /* Título em negrito */
+    h1 {
+      font-weight: bold;
+      margin-bottom: 20px;
+    }
+    /* Lista de instruções */
+    ul.instructions {
+      list-style: none;
+      padding: 0;
+      text-align: left;
+      margin: 20px auto;
+      max-width: 600px;
+    }
+    ul.instructions li {
+      margin-bottom: 10px;
+      font-size: 1.1em;
+    }
+    ul.instructions li::before {
+      content: "•";
+      margin-right: 10px;
+      color: #00c038;
+    }
+    /* Botão de ação */
+    button {
+      background-color: #00c038;
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1em;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    button:hover {
+      background-color: #00b330;
+    }
+    /* Área de exibição das coordenadas */
+    .coordinates {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #00c038;
+    }
+    /* Toast de mensagem */
+    #toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 5px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s ease, visibility 0.5s;
+      z-index: 1000;
+    }
+    #toast.show {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img class="logo" src="Prancheta13.png" alt="Logo Tropical Transportes">
+    <h1>Ferramenta de Geolocalização</h1>
+    <ul class="instructions">
+      <li>Certifique-se de estar em sua residência.</li>
+      <li>Clique no botão abaixo para autorizar o acesso à sua localização.</li>
+      <li>Após obter as coordenadas, clique no segundo botão para copiá-las.</li>
+    </ul>
+    <button id="getLocationButton" type="button" onclick="getLocation()">OBTER LOCALIZAÇÃO</button>
+    <div id="coordinatesDisplay" class="coordinates" style="display: none;">
+      Suas coordenadas: <span id="coordinates"></span>
+    </div>
+    <button id="copyButton" type="button" onclick="copyCoordinates()" disabled>COPIAR COORDENADAS</button>
+  </div>
+  
+  <!-- Toast para exibição de mensagens -->
+  <div id="toast"></div>
+  
+  <script>
+    // Função para exibir toast persistente (sem auto ocultar)
+    function showPersistentToast(message) {
+      var toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+    }
+    
+    // Função para ocultar o toast
+    function hideToast() {
+      var toast = document.getElementById("toast");
+      toast.classList.remove("show");
+    }
+    
+    // Função para exibir toast com auto ocultação (usada para mensagens de erro, por exemplo)
+    function showToast(message, duration = 3000) {
+      var toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+      setTimeout(function() {
+        toast.classList.remove("show");
+      }, duration);
+    }
+
+    // Variável global para armazenar as coordenadas
+    let coordinates = "";
+
+    // Função para obter a localização
+    function getLocation() {
+      const getLocationButton = document.getElementById("getLocationButton");
+      getLocationButton.disabled = true;
+
+      showPersistentToast("Por favor, permita o acesso à sua localização e aguarde.");
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          // Limitar as coordenadas a 6 casas decimais
+          const latitude = position.coords.latitude.toFixed(6);
+          const longitude = position.coords.longitude.toFixed(6);
+          coordinates = `${latitude}, ${longitude}`;
+
+          // Exibir as coordenadas na tela
+          document.getElementById("coordinates").textContent = coordinates;
+          document.getElementById("coordinatesDisplay").style.display = "block";
+
+          // Habilitar o botão de cópia
+          document.getElementById("copyButton").disabled = false;
+
+          showPersistentToast("Localização obtida com sucesso!");
+        },
+        function(error) {
+          let errorMsg = "";
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMsg = "Acesso à localização foi negado. Por favor, habilite o acesso em seu navegador.";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMsg = "Informações de localização não estão disponíveis.";
+              break;
+            case error.TIMEOUT:
+              errorMsg = "A solicitação para obter a localização foi expirada.";
+              break;
+            default:
+              errorMsg = "Ocorreu um erro desconhecido ao obter a localização.";
+              break;
+          }
+          showToast(errorMsg, 4000);
+          getLocationButton.disabled = false;
+        }
+      );
+    }
+
+    // Função para copiar as coordenadas
+    async function copyCoordinates() {
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(coordinates);
+        } else {
+          // Fallback para execCommand
+          const textarea = document.createElement('textarea');
+          textarea.value = coordinates;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+        }
+        showPersistentToast("Coordenadas copiadas com sucesso!");
+      } catch (error) {
+        showToast("Não foi possível copiar as coordenadas. Verifique as permissões.", 4000);
+      }
+    }
+  </script>
+</body>
+</html>
